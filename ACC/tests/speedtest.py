@@ -1,6 +1,6 @@
 from gopigo import *
 import time
-speed = 0
+speed = 30
 accel = 30
 
 print "Press ENTER to start"
