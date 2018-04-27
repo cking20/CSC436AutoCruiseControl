@@ -13,7 +13,7 @@ def commandList():
     print "*****************************************************"
 command = ""
 speed = 100
-min_speed = 40
+min_speed = 50
 max_speed = 150
 queue = multiprocessing.Queue()
 acc = ACC.ACC()
@@ -21,6 +21,7 @@ acc_process = multiprocessing.Process(target = acc.main_loop, args=(queue,))
 acc_process.start()
 volt_process = multiprocessing.Process(target = chargewarning.time_warning)
 volt_process.start()
+
 while command != "exit":
     commandList()
     command = raw_input()

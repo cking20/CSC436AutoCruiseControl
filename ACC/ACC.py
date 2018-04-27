@@ -62,8 +62,7 @@ def us_dist(pin):
 
 def check_encoders():
     #encl1 = enc_read(0)
-    encr1 = enc_read(1)
-    encl1 = enc_read(0)
+    
     
     #encr2 = enc_read(1)
     #encl2 = enc_read(0)
@@ -81,10 +80,18 @@ def check_encoders():
     #    encr1 = encr2
     #if encr1 < encr3:
      #   encr1 = encr3
+    count = 0
+    while count < 10:
+        time.sleep(.01)
+        encr1 = enc_read(1)
+        encl1 = enc_read(0)
     
-    left_enc_diff = encl1 - left_enc_init
-    right_enc_diff = encr1 - right_enc_init
+        left_enc_diff = encl1 - left_enc_init
+        right_enc_diff = encr1 - right_enc_init
 
+        if encl1 > 0 and encr1 > 0:
+            break
+     #   return (0,0)
     return (left_enc_diff, right_enc_diff)
 
 def compensate(speed):
@@ -92,24 +99,26 @@ def compensate(speed):
         return 0
     else:
         if speed > 40:
-            return int((9.0/(speed/100.0)) /1.5)
-            #return int(speed/100) * 10
+            return int((9.0/(speed/100.0)) /1.5) + 10
         else:        
-            return int(speed/100) * 10
+            return (int(speed/100) * 10) + 5
+
+
 
 class ACC:
     def __init__(self):
 
+        #set encoders
         self.left_enc_diff = 0
         self.right_enc_diff = 0
         
         #set initial speed
         self.minimum_start = 40
         self.max_speed = 150
-        self.accel = 20
-        
+        self.accel = 10
+        self.speed = self.minimum_start
         #set distances
-        self.min_safe_dist = 15
+        self.min_safe_dist = 20
         self.max_safe_dist = 50
 
     def main_loop(self,q):
@@ -117,12 +126,13 @@ class ACC:
         detected_object = True
         should_move = False
         old_dist = 0
-        speed = self.minimum_start
-        set_speed(speed)
-        comp = compensate(speed)
+        set_speed(self.speed)
         command = ""
         queue = q
         run_acc = False
+        print "left init: ",left_enc_init
+        print "right init: ",right_enc_init
+        
         try:
             while command != "exit":
                 if not queue.empty():
@@ -130,10 +140,8 @@ class ACC:
                     #print command
                     if command == "go":
                         run_acc = True
-                        set_right_speed(speed + compensate(speed))
-                        set_left_speed(speed + compensate(speed))
-                        #set_right_speed(speed + compensate(speed))
-                        #set_left_speed(speed)
+                        set_right_speed(self.minimum_start)
+                        set_left_speed(self.minimum_start)
                         fwd()
                     elif command == "stop":
                         run_acc = False
@@ -146,10 +154,11 @@ class ACC:
                     distance = us_dist(15)
                     #print "dist: ",distance," cm"
                     if(distance > 0):
+                        self.max_safe_dist = (.5*self.speed) + self.min_safe_dist
                         if distance < self.min_safe_dist:
                             stop()
                             self.speed = self.minimum_start
-                            set_speed(speed)
+                            set_speed(self.speed)
                             should_move = False
                             #print "Hazard!  Emergency stop!"
                         elif distance >= self.min_safe_dist and distance <= self.max_safe_dist:
@@ -157,13 +166,12 @@ class ACC:
                             can_accel = False
                             if old_dist > distance:
                                 #print "Approching, decelerating."
-                                speed = speed - (self.accel)
-                                if speed < self.minimum_start:
-                                    speed = self.minimum_start
+                                self.speed = self.speed - (self.accel)
+                                if self.speed < self.minimum_start:
+                                    self.speed = self.minimum_start
                                 #set_speed(speed)
-                                set_left_speed(speed) #(comp - 25))
-                                set_right_speed(speed + compensate(speed))  #(comp + 100))    
-                                comp = compensate(speed)
+                                set_left_speed(self.speed) #(comp - 25))
+                                set_right_speed(self.speed + compensate(self.speed))  #(comp + 100))    
                                 balance = False
                         else:
                             fwd()
@@ -174,50 +182,50 @@ class ACC:
                     if should_move:
                         #calculate the difference since last tick
                         left_enc_diff,right_enc_diff = check_encoders()
-                        #print "left enc:", left_enc_diff
-                        #print "right enc:", right_enc_diff
+                        print "left enc:", left_enc_diff
+                        print "right enc:", right_enc_diff
                         
                         #update the previous tick values
                         if balance:
-                            #if the left wheel has moved farther than the right
+                            #if the left wheel has moved farther than right
+                            #(it leans to the right)
                             if left_enc_diff > right_enc_diff:
                                 print "left more"
-                                #set_left_speed(speed - compensate(speed)) #(comp - 25))
-                                set_right_speed(speed + compensate(speed))  #(comp + 100))
+                                set_left_speed(self.speed - compensate(self.speed)*2) #(comp - 25))
+                                set_right_speed(self.speed + compensate(self.speed)*4)  #(comp + 100))
                                 #print "left speed", speed - comp
                                 #print "right speed",speed + comp
+                            #if the right wheel has moved farther than left
+                            #(it leans to the left)
                             elif left_enc_diff < right_enc_diff:
                                 print "right more"
-                                set_left_speed(speed + compensate(speed))
-                                #set_right_speed(speed - compensate(speed))
+                                set_left_speed(self.speed + compensate(self.speed))
+                                set_right_speed(self.speed - compensate(self.speed))
                                 #print "left speed", speed + comp
                                 #print "right speed",speed - comp
                             else:
                                 print "Balanced"
                                 #keep the speeds equal
-                                set_left_speed(speed)
-                                set_right_speed(speed)
+                                set_left_speed(self.speed - compensate(self.speed))
+                                set_right_speed(self.speed + compensate(self.speed))
                                 #print "left speed", speed
                                 #print "right speed",speed
                         else:
                             print "Balanced"
                             #keep the speeds equal
-                            set_left_speed(speed)
-                            set_right_speed(speed)
+                            set_left_speed(self.speed)
+                            set_right_speed(self.speed)
                             #print "left speed", speed
                             #print "right speed",speed
                     #print "speeds: " , read_motor_speed_cmd()
                     if can_accel:
-                        if speed < self.max_speed:
-                            speed = speed + self.accel
+                        if self.speed < self.max_speed:
+                            self.speed = self.speed + self.accel
                         else:
-                            speed = self.max_speed
-                        comp = compensate(speed)
-                        set_speed(speed)
-                    time.sleep(.1)
+                            self.speed = self.max_speed
+                        set_speed(self.speed)
+                    time.sleep(.05)
                     #print "******************"
             #print "done"
         except KeyboardInterrupt:
                 stop()
-            
-
